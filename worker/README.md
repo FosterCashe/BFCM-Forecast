@@ -24,3 +24,17 @@ Deployment notes:
   - 2GB+ memory: NUTS with 4 chains is hungry.
   - Store raw uploads in Supabase Storage before parsing (replayable ingestion).
   - Write model version + git SHA into model_runs.config_json on every run.
+
+Local dev (docker-compose): `docker compose up --build` from the repo root
+starts Postgres (loaded with db/schema.sql), seeds model/synthetic.py's two
+brands as fake tenants (scripts/seed_synthetic.py) with a model_run already
+queued for each, then starts the API on :8000 and the worker loop. Code:
+  worker/app.py       FastAPI: /upload and /connect/shopify are stubs;
+                       /runs, /runs/{id}, /results/{run_id} hit Postgres for real.
+  worker/pipeline.py  scripts/smoke_backtest.py's fit/forecast/score protocol,
+                       rearranged to read tenant data from Postgres and write
+                       forecast_results (one brand per tenant; see its docstring).
+  worker/loop.py       polls model_runs, claims with FOR UPDATE SKIP LOCKED.
+Fit is ADVI by default for a fast local loop (WORKER_FIT_METHOD=advi); set
+model_runs.config_json.fit_method or WORKER_FIT_METHOD to "nuts" for the real
+client protocol.

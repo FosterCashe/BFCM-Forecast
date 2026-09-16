@@ -50,10 +50,12 @@ def validate_spend(spend, daily):
     return f
 
 
-def detect_unexplained_spikes(daily, events, ratio=1.6, window=28):
+def detect_unexplained_spikes(daily, events, ratio=2.2, window=28):
     """Spike days not covered by any declared event (+/- 2 days). Each finding
     becomes a question back to the client: 'what happened on this date?'
-    Undeclared promos in history are the #1 silent forecast killer."""
+    Undeclared promos in history are the #1 silent forecast killer.
+    ratio=2.2: below ~2x, ordinary day-to-day NegBin dispersion trips this on
+    clean data (verified against model/synthetic.py across several seeds)."""
     f = []
     d = daily.copy(); d["date"] = pd.to_datetime(d["date"])
     ev = events.copy()

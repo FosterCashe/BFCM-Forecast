@@ -1,0 +1,76 @@
+# Local test rig for the full loop: Postgres (loaded with db/schema.sql) +
+# a one-off seed of model/synthetic.py as two fake tenants + the FastAPI
+# app + the polling worker loop.
+#
+#   docker compose up --build
+#   curl http://localhost:8000/health
+#
+# The seed step already queues one model_run per fake tenant, so the worker
+# picks up work within one poll cycle -- watch it with:
+#   docker compose logs -f worker
+#
+# To trigger another run by hand, grab a tenant_id from the seed logs:
+#   curl -X POST localhost:8000/runs -H 'content-type: application/json' \
+#     -d '{"tenant_id": "<uuid from seed logs>"}'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: forecast
+      POSTGRES_PASSWORD: forecast
+      POSTGRES_DB: forecast
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forecast -d forecast"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  seed:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: ["python", "-m", "scripts.seed_synthetic"]
+    environment:
+      DATABASE_URL: postgresql://forecast:forecast@postgres:5432/forecast
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: ["uvicorn", "worker.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://forecast:forecast@postgres:5432/forecast
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    command: ["python", "-m", "worker.loop"]
+    environment:
+      DATABASE_URL: postgresql://forecast:forecast@postgres:5432/forecast
+      WORKER_POLL_INTERVAL: "10"
+      WORKER_FIT_METHOD: "advi"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
