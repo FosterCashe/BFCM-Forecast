@@ -1,0 +1,134 @@
+# Intake spec v2. Rule: every question feeds a model input or validation rule.
+# Every answer carries an evidence_tier (data | evidenced | assumption).
+# Base forecasts use data-backed inputs only; assumptions become labeled scenarios.
+
+sections:
+  - id: business_basics
+    questions:
+      - key: category
+        ask: "What category are you in?"
+        type: select
+        options: [apparel, beauty, food_bev, supplements, home, outdoor, other]
+        feeds: pooling groups, return-rate priors, sanity checks
+      - key: brand_age
+        ask: "How old is the brand?"
+        type: select
+        options: [under_2y, 2_to_5y, over_5y]
+        feeds: trend_slope prior width (young brands get 0.5, mature 0.3)
+      - key: subscription_share
+        ask: "Share of revenue that is subscription?"
+        type: select
+        options: [none, under_25, 25_to_50, over_50]
+      - key: paid_dependence
+        ask: "Roughly what share of new customers come from paid ads?"
+        type: select
+        options: [under_30, 30_to_60, over_60]
+        feeds: media_beta prior width
+
+  - id: data_definitions        # boring, prevents the worst client conversation
+    questions:
+      - key: revenue_definition
+        ask: "Is your export gross revenue, net of discounts, or net of returns?"
+        type: select
+        options: [gross, net_discounts, net_returns]
+        feeds: report labeling; all outputs state their definition
+      - key: return_rate
+        ask: "Typical return rate, and is holiday higher?"
+        type: number_pair
+        feeds: net-revenue and margin layers
+      - key: channels_included
+        ask: "Does the export include Amazon / wholesale / retail, or Shopify only?"
+        type: multi_select
+      - key: store_timezone
+        ask: "Store timezone?"
+        type: select
+        feeds: date normalization (Shopify UTC vs ad-platform local)
+      - key: cogs_pct
+        ask: "Blended COGS % (for margin scenarios)?"
+        type: number
+
+  - id: promo_history           # the most valuable data in this intake
+    intro: >
+      Every promo you ran, even small ones. A July 4th sale is a within-brand
+      observation of how YOUR customers respond to offers; it tightens the model
+      more than anything we can borrow from other brands. Undeclared promos in
+      history are the #1 silent forecast killer, so after upload we scan for
+      revenue spikes with no declared event and ask about them.
+    questions:
+      - key: prior_promos
+        ask: "All promos, last 2 years: dates, offer, depth, roughly what share of the catalog."
+        type: repeating_group
+        fields: {start: date, end: date, offer_type: select, depth: slider, discounted_share: slider}
+        evidence_tier: data
+      - key: events_planned
+        ask: "Same for everything planned between now and year end."
+        type: repeating_group
+        evidence_tier: data   # the plan is a fact; its EFFECT is estimated
+
+  - id: last_year_context
+    questions:
+      - key: anomalies
+        ask: "Was any past promo inflated or hurt by something that won't repeat?"
+        type: multi_select
+        options: [stockout, site_outage, product_launch, viral_moment, shipping_cutoff, none]
+        feeds: events.anomaly flag (instance down-weighted in pooling)
+      - key: anomalies_freetext
+        ask: "Anything else unusual? Plain words fine."
+        type: freetext
+        feeds: LLM parses to flags; parsed result shown back for confirmation
+
+  - id: audience
+    questions:
+      - key: list_sizes
+        ask: "Email + SMS subscribers today, and last November 1?"
+        type: number_pair
+        feeds: events.list_ratio -> eta covariate
+        evidence_tier: data
+      - key: send_calendar
+        ask: "Export of major campaign sends (date, audience) if you have it."
+        type: file
+        feeds: email_sends -> send covariate; enables 'add a CM send' scenarios
+
+  - id: media_context
+    questions:
+      - key: account_changes
+        ask: "Any material creative or account changes this year (new format, UGC, creator, restructure)? When?"
+        type: repeating_group
+        fields: {what: text, since: date}
+        feeds: media regime dummy from the stated date; the date is CHECKED against
+               your own efficiency data, so this is verifiable
+      - key: creative_expectation
+        ask: "Do you expect this year's holiday creative to outperform?"
+        type: select
+        options: [no_change, hopeful, tested_with_evidence]
+        warning: >
+          Creative performance is not a tangible predictor unless we have prior
+          data leading into the event. 'Hopeful' enters as an UNVERIFIED
+          ASSUMPTION scenario toggle, never the base forecast. 'Tested' requires
+          cost-side evidence (CPM/CTR trends), not ROAS, which is circular here.
+        evidence_tier: assumption
+
+  - id: launches_inventory
+    questions:
+      - key: launch_calendar
+        ask: "Product launches before or during the window? Your expected revenue range?"
+        type: repeating_group
+        fields: {name: text, date: date, cannibalizes: select,
+                 expected_low: number, expected_high: number}
+        evidence_tier: assumption
+        feeds: add_launch component, labeled CLIENT ASSUMPTION in every output
+      - key: inventory
+        ask: "Units on hand for hero SKUs (or total sellable units) going into the window?"
+        type: repeating_group
+        feeds: inventory ceilings -> P(sellout) and truncated forecasts
+
+  - id: data_upload
+    questions:
+      - key: shopify_csv
+        ask: "Daily orders + revenue, 2+ years."
+        type: file
+        validation: [date_gaps, min_history_365d, nonneg, aov_dispersion, spike_vs_events]
+      - key: ad_csvs
+        ask: "Daily spend by channel."
+        type: file
+        validation: [date_gaps, channel_kind_mapping, overlap_with_orders, timezone_note]

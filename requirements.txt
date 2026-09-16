@@ -1,0 +1,4 @@
+pymc>=5.10
+arviz
+pandas
+numpy

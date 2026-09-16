@@ -1,0 +1,4 @@
+{"id": "gid://shopify/Order/1", "createdAt": "2025-11-28T15:00:00Z", "currentTotalPriceSet": {"shopMoney": {"amount": "120.00"}}}
+{"id": "gid://shopify/Order/2", "createdAt": "2025-11-28T23:30:00Z", "currentTotalPriceSet": {"shopMoney": {"amount": "80.00"}}}
+{"id": "gid://shopify/Order/3", "createdAt": "2025-11-29T04:30:00Z", "currentTotalPriceSet": {"shopMoney": {"amount": "200.00"}}}
+{"id": "gid://shopify/Order/4", "createdAt": "2025-11-29T14:00:00Z", "currentTotalPriceSet": {"shopMoney": {"amount": "60.00"}}}
