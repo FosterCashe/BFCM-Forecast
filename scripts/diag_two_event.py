@@ -3,6 +3,11 @@ given history start. Default start trains on one BFCM (2024); --start 2023-01-05
 adds BFCM 2023 while keeping 2024-2025 data identical, so the two runs differ
 only by the extra history.
 
+Not yet gate-clean: the two-event configuration's first run (seed 7) had
+rhat_max 1.013, which fails the convergence gate. Before quoting any result from
+it, run the 3-seed protocol (e.g. --seed 7, 11, 13) and confirm pooled divergences
+< 0.5%, rhat_max <= 1.01 and no ESS warnings.
+
 Usage: python scripts/diag_two_event.py [--start 2023-01-05] [--seed 7]
 """
 import argparse
