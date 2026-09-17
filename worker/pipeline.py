@@ -30,16 +30,24 @@ from model.model import build_model
 DEFAULT_BACKTEST_DAYS = 21
 PROBS = (0.1, 0.25, 0.5, 0.75, 0.9)  # matches forecast_results.q10..q90
 
-# ADVI is smoke/dev speed; NUTS is the non-negotiable for real client runs
-# (see README "Non-negotiable workflow per client"). Draw/tune counts here
-# are dev-sized so `docker compose up` finishes in seconds, not minutes --
-# raise them (or set fit_method: "nuts" with bigger counts) for real runs.
+# ADVI is smoke/dev speed. NUTS (config_json fit_method: "nuts") is the real
+# client protocol from the README; its defaults match that protocol, and a
+# run can override any of them via config_json nuts: {draws, tune, ...}.
 FIT_METHOD = os.environ.get("WORKER_FIT_METHOD", "advi")
 ADVI_ITERS = int(os.environ.get("WORKER_ADVI_ITERS", "20000"))
 ADVI_DRAWS = int(os.environ.get("WORKER_ADVI_DRAWS", "500"))
-NUTS_DRAWS = int(os.environ.get("WORKER_NUTS_DRAWS", "300"))
-NUTS_TUNE = int(os.environ.get("WORKER_NUTS_TUNE", "300"))
-NUTS_CHAINS = int(os.environ.get("WORKER_NUTS_CHAINS", "2"))
+NUTS_DEFAULTS = {
+    "chains": int(os.environ.get("WORKER_NUTS_CHAINS", "4")),
+    "draws": int(os.environ.get("WORKER_NUTS_DRAWS", "1000")),
+    "tune": int(os.environ.get("WORKER_NUTS_TUNE", "1000")),
+    "target_accept": float(os.environ.get("WORKER_NUTS_TARGET_ACCEPT", "0.9")),
+}
+DRAWS_DIR = os.environ.get("WORKER_DRAWS_DIR", "/data/draws")
+
+# Coefficients the page may need to label as prior-driven rather than learned.
+SHRINKAGE_COEFS = ("event_depth_coef", "event_list_coef", "event_type_effect")
+PRIOR_DRIVEN_SD_RATIO = 0.9
+PRIOR_DRIVEN_MEAN_SHIFT = 0.2
 
 
 GIT_SHA_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "GIT_SHA")
@@ -117,17 +125,58 @@ def fetch_tenant_frames(conn, tenant_id):
     return brand, daily, spend, events
 
 
-def _nuts_diagnostics(idata):
-    try:
-        s = az.summary(idata, var_names=PARAMS)
-        rhat_max = float(s["r_hat"].max())
-    except Exception:
-        rhat_max = None
-    try:
-        divergences = int(idata.sample_stats["diverging"].sum())
-    except Exception:
-        divergences = None
-    return {"rhat_max": rhat_max, "divergences": divergences}
+def _nuts_diagnostics(idata, free_var_names):
+    """Worst rhat per free (sampled) variable plus divergence count.
+    Deterministics are skipped: they're functions of the free variables, and a
+    constant one (single-brand event_brand) has an undefined, NaN rhat. A NaN
+    in a free variable (e.g. a stuck chain) is stored as null so JSON stays
+    valid and the API flags it. Errors propagate: no diagnostics, no run."""
+    rhat = az.rhat(idata)
+    per_var = {}
+    for name in free_var_names:
+        values = np.asarray(rhat[name].values, dtype=float)
+        per_var[name] = None if np.isnan(values).any() else float(values.max())
+    finite = [v for v in per_var.values() if v is not None]
+    return {
+        "rhat": per_var,
+        "rhat_max": max(finite) if finite else None,
+        "divergences": int(idata.sample_stats["diverging"].sum()),
+    }
+
+
+def _prior_shrinkage(model, idata, event_types):
+    """Posterior sd / prior sd and |posterior mean - prior mean| in prior sds,
+    per coefficient. Prior parameters are read from the model graph, so this
+    stays in sync with model/model.py. prior_driven means the data barely
+    moved the prior. Coefficients fixed at zero (not sampled) are reported so."""
+    free = {rv.name: rv for rv in model.free_RVs}
+    out = {}
+    for name in SHRINKAGE_COEFS:
+        rv = free.get(name)
+        if rv is None:
+            out[name] = {"sampled": False}
+            continue
+        if type(rv.owner.op).__name__ != "NormalRV":
+            raise ValueError(f"prior shrinkage assumes a Normal prior on {name}")
+        values = idata.posterior[name].values  # (chain, draw, *shape)
+        prior_mu, prior_sd = (
+            np.ravel(np.broadcast_to(p.eval(), values.shape[2:])) for p in rv.owner.op.dist_params(rv.owner)
+        )
+        values = values.reshape(values.shape[0] * values.shape[1], -1)
+        elements = []
+        for j in range(values.shape[1]):
+            sd_ratio = float(values[:, j].std() / prior_sd[j])
+            shift = float(abs(values[:, j].mean() - prior_mu[j]) / prior_sd[j])
+            elements.append({
+                "posterior_sd_ratio": sd_ratio,
+                "mean_shift_prior_sd": shift,
+                "prior_driven": sd_ratio > PRIOR_DRIVEN_SD_RATIO and shift < PRIOR_DRIVEN_MEAN_SHIFT,
+            })
+        if rv.type.ndim == 0:
+            out[name] = {"sampled": True, **elements[0]}
+        else:
+            out[name] = {"sampled": True, "by_type": dict(zip(event_types, elements))}
+    return out
 
 
 def run_model_run(conn, run_id):
@@ -176,25 +225,43 @@ def run_model_run(conn, run_id):
         D = build_design(train_daily, spend, train_events, vocab)
 
         fit_method = config.get("fit_method", FIT_METHOD)
+        if fit_method not in ("advi", "nuts"):
+            raise ValueError(f"fit_method must be 'advi' or 'nuts', got {fit_method!r}")
+        seed = int(config.get("random_seed", 7))
+        in_window = fut_events[pd.to_datetime(fut_events["start"]) <= forecast_end]
         diagnostics = {
             "fit_method": fit_method,
+            "random_seed": seed,
             "n_train_obs": int(D["n_obs"]),
             "undeclared_spike_findings": len(asks),
+            "event_depths": {
+                "train": sorted({round(float(x), 3) for x in train_events["depth"]}),
+                "forecast": sorted({round(float(x), 3) for x in in_window["depth"]}),
+            },
         }
-        with build_model(D):
+        with build_model(D) as model:
             if fit_method == "nuts":
+                sampler = {**NUTS_DEFAULTS, **config.get("nuts", {})}
+                diagnostics["sampler"] = sampler
                 idata = pm.sample(
-                    draws=NUTS_DRAWS, tune=NUTS_TUNE, chains=NUTS_CHAINS,
-                    target_accept=0.9, progressbar=False, random_seed=7,
+                    draws=int(sampler["draws"]), tune=int(sampler["tune"]), chains=int(sampler["chains"]),
+                    target_accept=float(sampler["target_accept"]), progressbar=False, random_seed=seed,
                 )
-                diagnostics.update(_nuts_diagnostics(idata))
+                diagnostics.update(_nuts_diagnostics(idata, [rv.name for rv in model.free_RVs]))
             else:
-                approx = pm.fit(ADVI_ITERS, method="advi", random_seed=7, progressbar=False)
+                approx = pm.fit(ADVI_ITERS, method="advi", random_seed=seed, progressbar=False)
                 idata = approx.sample(ADVI_DRAWS)
+            diagnostics["prior_shrinkage"] = _prior_shrinkage(model, idata, vocab["event_types"])
+
+        if config.get("persist_draws"):
+            os.makedirs(DRAWS_DIR, exist_ok=True)
+            path = os.path.join(DRAWS_DIR, f"{run_id}.nc")
+            idata.to_netcdf(path, engine="h5netcdf")
+            diagnostics["draws_path"] = path
 
         P = extract_posterior(idata, PARAMS)
         Df = build_design(fut_daily, spend, fut_events, vocab)
-        draws = forecast(P, Df)
+        draws = forecast(P, Df, D)
         summ = summarize(draws, Df, probs=PROBS)[0]  # single-brand vocab -> index 0
 
         actual = Df["daily"]["revenue"].to_numpy()
@@ -209,8 +276,19 @@ def run_model_run(conn, run_id):
             q = np.quantile(arr, PROBS, axis=0)
             for i, d in enumerate(dates_out):
                 rows.append(("base", d, metric, *(float(q[p, i]) for p in range(len(PROBS)))))
+        total_pct = [float(v) for v in np.percentile(summ["total_draws"], np.arange(101))]
 
         with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into forecast_totals (run_id, tenant_id, scenario, metric, start_date, end_date, percentiles)
+                values (%s, %s, 'base', 'revenue', %s, %s, %s)
+                on conflict (run_id, scenario, metric) do update
+                set start_date = excluded.start_date, end_date = excluded.end_date,
+                    percentiles = excluded.percentiles
+                """,
+                (run_id, tenant_id, dates_out[0], dates_out[-1], psycopg2.extras.Json(total_pct)),
+            )
             psycopg2.extras.execute_values(
                 cur,
                 """

@@ -66,6 +66,9 @@ services:
       DATABASE_URL: postgresql://forecast:forecast@postgres:5432/forecast
       WORKER_POLL_INTERVAL: "10"
       WORKER_FIT_METHOD: "advi"
+      WORKER_DRAWS_DIR: /data/draws
+    volumes:
+      - draws:/data/draws
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,3 +77,4 @@ services:
 
 volumes:
   pgdata:
+  draws:

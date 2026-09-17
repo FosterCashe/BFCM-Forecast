@@ -92,3 +92,16 @@ create table forecast_results (
     q10 numeric, q25 numeric, q50 numeric, q75 numeric, q90 numeric,
     primary key (run_id, scenario, date, metric)
 );
+
+-- Window-total distribution. Daily quantiles don't sum to total quantiles,
+-- so totals and P(total > target) need the total's own draws, summarized.
+create table forecast_totals (
+    run_id      uuid references model_runs,
+    tenant_id   uuid references tenants,
+    scenario    text not null,
+    metric      text not null,
+    start_date  date not null,
+    end_date    date not null,
+    percentiles jsonb not null,           -- 101 values: the 0th..100th percentile
+    primary key (run_id, scenario, metric)
+);

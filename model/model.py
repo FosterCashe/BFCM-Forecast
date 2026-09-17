@@ -44,14 +44,27 @@ def build_model(D):
         four_c = pm.Normal("fourier", 0.0, 0.3, shape=D["four"].shape[1])
 
         # ---- event magnitude hierarchy -------------------------------------
+        # Hierarchical offsets are non-centered (z * sigma) to avoid funnel
+        # divergences under NUTS; Deterministics keep the posterior names stable.
         base = pm.Normal("event_base", 0.8, 0.5)
-        sb = pm.HalfNormal("event_brand_sigma", 0.4)
-        eb = pm.Normal("event_brand", 0.0, sb, shape=nb)
+        if nb > 1:
+            sb = pm.HalfNormal("event_brand_sigma", 0.4)
+            eb_z = pm.Normal("event_brand_z", 0.0, 1.0, shape=nb)
+            eb = sb * eb_z
+        else:
+            # event_base already carries the one brand's offset; sampling both is redundant.
+            eb = pt.zeros(nb)
+        eb = pm.Deterministic("event_brand", eb)
         gamma = pm.Normal("event_depth_coef", 1.8, 0.6)
-        dtyp = pm.Normal("event_type_effect", 0.0, 0.3, shape=nt)
+        if nt == 1:
+            # One event type: its effect is indistinguishable from event_base.
+            dtyp = pm.Deterministic("event_type_effect", pt.zeros(nt))
+        else:
+            dtyp = pm.Normal("event_type_effect", 0.0, 0.3, shape=nt)
         eta = pm.Normal("event_list_coef", 0.6, 0.3)
         eps_s = pm.HalfNormal("event_eps_sigma", 0.25)
-        eps = pm.Normal("event_eps", 0.0, eps_s, shape=ni)
+        eps_z = pm.Normal("event_eps_z", 0.0, 1.0, shape=ni)
+        eps = pm.Deterministic("event_eps", eps_s * eps_z)
         anom = pm.Normal("event_anomaly", 0.0, 0.5, shape=ni)
 
         M = (
@@ -71,7 +84,8 @@ def build_model(D):
 
         # pull-forward: demand borrowed from before/after the event
         pf_s = pm.HalfNormal("event_pf_sigma", 0.10)
-        pf = pm.HalfNormal("event_pullforward", pf_s, shape=ni)
+        pf_z = pm.HalfNormal("event_pullforward_z", 1.0, shape=ni)
+        pf = pm.Deterministic("event_pullforward", pf_s * pf_z)
         lift = pt.inc_subtensor(lift[D["pf_obs"]], -pf[D["pf_inst"]] * D["pf_w"])
 
         # ---- media ---------------------------------------------------------
@@ -82,6 +96,12 @@ def build_model(D):
         beta = pm.HalfNormal("media_beta", 0.3, shape=nc)  # loosen to 0.5 if heavily paid-driven
         xi = pm.Normal("media_regime", 0.0, 0.15)  # skeptical creative/account-change multiplier
         media = pt.sum(beta * ad / (ad + K + 1e-6), axis=1) * pt.exp(xi * D["regime"])
+        # Center per brand on this draw's training-window mean: adstocked spend
+        # barely moves day to day, so uncentered media acts as a second intercept.
+        # forecast.py subtracts the same training mean; never a future-window one.
+        n_per_brand = np.maximum(np.bincount(D["b_idx"], minlength=nb), 1)
+        media_mean_b = pt.inc_subtensor(pt.zeros(nb)[D["b_idx"]], media) / n_per_brand
+        media = media - media_mean_b[D["b_idx"]]
 
         send_c = pm.HalfNormal("send_coef", 0.15)
 

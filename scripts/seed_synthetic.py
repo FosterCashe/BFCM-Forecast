@@ -28,6 +28,35 @@ def tenant_id_for(brand):
     return uuid.uuid5(NAMESPACE, brand)
 
 
+def intake_answers(d, e):
+    """Tiered intake answers for a fake tenant, derived from what was generated
+    so every DATA-BACKED line is actually true of the seeded rows."""
+    first, last = d["date"].min(), d["date"].max()
+    months = round((last - first).days / 30.44)
+    bfcm = e.sort_values("start")
+    past, planned = bfcm.iloc[:-1], bfcm.iloc[-1]
+
+    def fmt(iso):
+        day = dt.date.fromisoformat(iso)
+        return f"{day:%b} {day.day}, {day.year}"
+
+    return [
+        ("shopify_csv", "data", {
+            "summary": f"{months} months of daily orders and revenue ({first:%b %Y} to {last:%b %Y})",
+        }),
+        ("prior_promos", "data", {
+            "summary": "; ".join(f"BFCM {r.start[:4]} at {r.depth:.0%} sitewide" for r in past.itertuples())
+                       + " in history, declared with dates and depth",
+        }),
+        ("events_planned", "data", {
+            "summary": f"BFCM {planned.start[:4]} planned at {planned.depth:.0%} sitewide, "
+                       f"{fmt(planned.start)} to {fmt(planned.end)}",
+        }),
+        ("ad_csvs", "data", {"summary": "Daily Meta spend for the full history"}),
+        ("launch_calendar", "assumption", {"summary": "No product launch during the window (client-stated)"}),
+    ]
+
+
 def main():
     daily, spend, events = generate()
     conn = psycopg2.connect(DATABASE_URL)
@@ -48,12 +77,14 @@ def main():
                 psycopg2.extras.execute_values(
                     cur,
                     """
-                    insert into daily_metrics (tenant_id, date, orders, revenue)
+                    insert into daily_metrics (tenant_id, date, orders, revenue, revenue_definition)
                     values %s
                     on conflict (tenant_id, date) do update
-                    set orders = excluded.orders, revenue = excluded.revenue
+                    set orders = excluded.orders, revenue = excluded.revenue,
+                        revenue_definition = excluded.revenue_definition
                     """,
-                    [(str(tid), r.date.date(), int(r.orders), float(r.revenue)) for r in d.itertuples()],
+                    # synthetic AOV already has the discount price factor applied
+                    [(str(tid), r.date.date(), int(r.orders), float(r.revenue), "net_discounts") for r in d.itertuples()],
                 )
 
                 s = spend[spend["brand"] == brand]
@@ -81,6 +112,17 @@ def main():
                         (str(tid), r.event_id, r.event_type, dt.date.fromisoformat(r.start), dt.date.fromisoformat(r.end), float(r.depth))
                         for r in e.itertuples()
                     ],
+                )
+
+                psycopg2.extras.execute_values(
+                    cur,
+                    """
+                    insert into intake_answers (tenant_id, question_key, answer_json, evidence_tier)
+                    values %s
+                    on conflict (tenant_id, question_key) do update
+                    set answer_json = excluded.answer_json, evidence_tier = excluded.evidence_tier
+                    """,
+                    [(str(tid), key, psycopg2.extras.Json(answer), tier) for key, tier, answer in intake_answers(d, e)],
                 )
 
                 cur.execute("select count(*) from model_runs where tenant_id = %s", (str(tid),))

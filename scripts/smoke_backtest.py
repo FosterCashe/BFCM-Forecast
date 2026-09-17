@@ -50,7 +50,7 @@ def main():
 
     P = extract_posterior(idata, PARAMS)
     Df = build_design(fut_daily, spend, fut_events, vocab)  # full spend history for adstock context
-    draws = forecast(P, Df)
+    draws = forecast(P, Df, D)
     summ = summarize(draws, Df, probs=(0.1, 0.5, 0.9))
 
     print("\n=== Holdout: BFCM 2025 (never seen by the model) ===")

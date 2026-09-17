@@ -41,8 +41,10 @@ documented track record and labeled assumptions. See model/output.py.
     python scripts/smoke_backtest.py
 
 Verified on synthetic holdout (BFCM 2025 unseen, one brand changes depth
-30% -> 40%): median-path MAPE ~19-21%, 80% coverage 90-95% (slightly wide
-under ADVI, the safe direction), brand_b total forecast $809k vs actual $806k.
+30% -> 40%): median-path MAPE ~20-21%, 80% coverage 90-95% (slightly wide
+under ADVI, the safe direction). brand_b window total: median $716k-$728k
+across 3 runs vs actual $806k (about 10% low; actual sits inside the 80% range,
+roughly $520k-$1.02M). ADVI results vary run to run even with a fixed seed.
 
 ## Model summary
 
@@ -67,6 +69,9 @@ and report P(sellout). Launches enter as client-assumption lognormals.
 2. Backtest on THEIR history before delivering anything. Coverage is the product.
 3. NUTS for real runs (pm.sample, 4 chains, target_accept=0.9); ADVI is smoke
    only. Store rhat/divergences + backtest scores in model_runs.diagnostics.
+   Convergence gate, run with 3 seeds: passes only when pooled divergences are
+   under 0.5% of draws, rhat_max <= 1.01, and there are no effective-sample-size
+   warnings. Divergence counts swing widely between seeds; never gate on one.
 4. pm.sample_prior_predictive before every first fit: eyeball implied dollars.
 5. Every client assumption labeled in the output. No silent boosts, ever.
 

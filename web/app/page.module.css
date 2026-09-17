@@ -1,0 +1,213 @@
+.main {
+  margin: 0 auto;
+  max-width: 1120px;
+  min-height: 100vh;
+  padding: 72px 64px 128px;
+}
+
+.header {
+  align-items: flex-end;
+  display: flex;
+  gap: 48px;
+  justify-content: space-between;
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  margin: 0 0 8px;
+}
+
+.title {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.meta {
+  color: var(--ink-2);
+  font-size: 14px;
+  margin: 8px 0 0;
+}
+
+.picker {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  gap: 12px;
+}
+
+.picker select {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink-2);
+  cursor: pointer;
+  font: inherit;
+  max-width: 360px;
+  padding: 8px 12px;
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Hero and chart read as one story: keep this gap small. */
+.chartSection {
+  margin-top: 56px;
+}
+
+.section {
+  margin-top: 96px;
+}
+
+.sectionHead {
+  align-items: baseline;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.h2 {
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: 14px;
+  margin: 8px 0 0;
+}
+
+.explainer {
+  color: var(--ink-2);
+  font-size: 13px;
+  margin: 12px 0 0;
+}
+
+.metrics {
+  display: flex;
+  gap: 96px;
+  margin-top: 32px;
+}
+
+.metrics > div {
+  max-width: 320px;
+}
+
+.metricValue {
+  color: var(--ink);
+  font-size: 56px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 0 0 12px;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+
+.assumptions {
+  margin: 24px 0 16px;
+}
+
+.assumption {
+  border-bottom: 1px solid var(--grid);
+  display: grid;
+  gap: 32px;
+  grid-template-columns: 200px 1fr;
+  padding: 14px 0;
+}
+
+.assumption:first-child {
+  border-top: 1px solid var(--grid);
+}
+
+.assumption dd {
+  color: var(--ink);
+  font-size: 15px;
+  margin: 0;
+}
+
+.tier,
+.tierUnbacked {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  padding-top: 2px;
+  text-transform: uppercase;
+}
+
+.tier {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.tierUnbacked {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.empty {
+  color: var(--ink-2);
+  font-size: 15px;
+  margin-top: 56px;
+}
+
+.loading {
+  height: 480px;
+}
+
+.tableView {
+  margin-top: 8px;
+}
+
+.tableView summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tableView table {
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 16px;
+  width: 100%;
+}
+
+.tableView th,
+.tableView td {
+  border-bottom: 1px solid var(--grid);
+  padding: 8px 0;
+  text-align: right;
+}
+
+.tableView thead th {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.tableView th:first-child {
+  text-align: left;
+}
+
+.tableView tbody th {
+  color: var(--ink-2);
+  font-weight: 400;
+}
+
+.tableView td {
+  color: var(--ink);
+}

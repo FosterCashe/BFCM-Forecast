@@ -26,10 +26,22 @@ def extract_posterior(idata, names=PARAMS):
     return {n: np.moveaxis(ds[n].values, -1, 0) for n in names}
 
 
-def forecast(P, Df, rng=None):
+def _media(P, s, D):
+    powers = P["adstock_decay"][s][:, None] ** np.arange(L_ADSTOCK + 1)[None, :]
+    ad = np.sum(D["X_lag"] * powers[None, :, :], axis=2)
+    media = np.sum(P["media_beta"][s] * ad / (ad + P["sat_halfpoint"][s] + 1e-6), axis=1)
+    return media * np.exp(P["media_regime"][s] * D["regime"])
+
+
+def forecast(P, Df, D_train, rng=None):
+    """D_train: the design the posterior was fit on. The model centers media on
+    each brand's training-window mean per draw, so the forecast must subtract
+    that same training mean, never one recomputed on the forecast window."""
     rng = rng or np.random.default_rng(7)
     S = P["brand_intercept"].shape[0]
     n = Df["n_obs"]
+    n_brands = D_train["n_brands"]
+    n_train_per_brand = np.maximum(np.bincount(D_train["b_idx"], minlength=n_brands), 1)
     orders_d = np.zeros((S, n))
     aov_d = np.zeros((S, n))
     typ_of_ev = Df["inst_type"][Df["ev_inst"]] if Df["n_inst"] else np.array([], int)
@@ -58,10 +70,10 @@ def forecast(P, Df, rng=None):
                 + P["aov_depth_coef"][s] * (Df["inst_depth"][Df["ev_inst"]] - DEPTH_CENTER),
             )
 
-        powers = P["adstock_decay"][s][:, None] ** np.arange(L_ADSTOCK + 1)[None, :]
-        ad = np.sum(Df["X_lag"] * powers[None, :, :], axis=2)
-        media = np.sum(P["media_beta"][s] * ad / (ad + P["sat_halfpoint"][s] + 1e-6), axis=1)
-        media = media * np.exp(P["media_regime"][s] * Df["regime"])
+        train_mean_b = (
+            np.bincount(D_train["b_idx"], weights=_media(P, s, D_train), minlength=n_brands) / n_train_per_brand
+        )
+        media = _media(P, s, Df) - train_mean_b[Df["b_idx"]]
 
         log_mu = (
             P["brand_intercept"][s][Df["b_idx"]]

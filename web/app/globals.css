@@ -1,0 +1,54 @@
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --accent: #2a78d6;
+  --band-outer: 0.12;
+  --band-inner: 0.22;
+  /* what the overlapped inner band looks like: 1 - (1 - outer)(1 - inner) */
+  --band-inner-key: 0.31;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --accent: #3987e5;
+    --band-outer: 0.2;
+    --band-inner: 0.28;
+    --band-inner-key: 0.42;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+code {
+  font-family: ui-monospace, "Cascadia Code", Menlo, monospace;
+  font-size: 0.92em;
+}

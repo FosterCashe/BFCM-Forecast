@@ -1,0 +1,77 @@
+.frame {
+  height: 400px;
+  width: 100%;
+}
+
+.tooltip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  padding: 12px 14px;
+  min-width: 180px;
+}
+
+.tooltipDate {
+  color: var(--ink-2);
+  font-size: 12px;
+  margin: 0 0 4px;
+}
+
+.tooltipValue {
+  color: var(--ink);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.tooltipRanges {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 16px;
+  font-size: 12px;
+  margin: 0;
+}
+
+.tooltipRanges dt {
+  color: var(--muted);
+}
+
+.tooltipRanges dd {
+  color: var(--ink-2);
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.key {
+  display: flex;
+  gap: 24px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+
+.key li {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.keyLine {
+  background: var(--accent);
+  border-radius: 1px;
+  display: inline-block;
+  height: 2px;
+  width: 16px;
+}
+
+.keySwatch {
+  background: var(--accent);
+  border-radius: 3px;
+  display: inline-block;
+  height: 12px;
+  width: 16px;
+}

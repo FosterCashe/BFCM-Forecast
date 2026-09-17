@@ -37,4 +37,14 @@ queued for each, then starts the API on :8000 and the worker loop. Code:
   worker/loop.py       polls model_runs, claims with FOR UPDATE SKIP LOCKED.
 Fit is ADVI by default for a fast local loop (WORKER_FIT_METHOD=advi); set
 model_runs.config_json.fit_method or WORKER_FIT_METHOD to "nuts" for the real
-client protocol.
+client protocol (4 chains, 1000 tune + 1000 draws, target_accept 0.9; override
+per run with config_json.nuts). NUTS runs store per-variable worst rhat and
+divergences in diagnostics_json; run responses carry rhat_flag and
+rhat_flagged_params when any rhat exceeds 1.01.
+Other run options (config_json): random_seed (default 7); persist_draws: true
+writes the full posterior + sample stats as NetCDF to WORKER_DRAWS_DIR/<run_id>.nc
+(the `draws` volume in docker-compose; path recorded in diagnostics_json.draws_path),
+reopen with xarray.open_datatree(path, engine="h5netcdf"). Every fit also records
+diagnostics_json.prior_shrinkage (posterior sd / prior sd, mean shift in prior sds;
+prior_driven when > 0.9 and < 0.2) for event_depth_coef, event_list_coef and
+event_type_effect, plus event_depths for training vs forecast-window events.
