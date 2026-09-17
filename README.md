@@ -32,6 +32,7 @@ documented track record and labeled assumptions. See model/output.py.
     model/output.py       the report: ranges + backtested error + assumption tiers
     ingest/validate.py    upload checks incl. undeclared-spike detection
     scripts/smoke_backtest.py  end-to-end: fit, forecast held-out BFCM, score, report
+    scripts/diag_*.py     ground-truth diagnostics against the synthetic generator
     db/schema.sql         Postgres, tenant_id + RLS-ready, evidence tiers stored
     intake/intake_spec.yaml    every wizard question mapped to a model input
 
@@ -49,14 +50,17 @@ brand_b changes depth 30% -> 40%):
     brand_b  19%   90%      $721k          $497k-$1.02M     $844k   $831k
 
 "Generator central" is model/synthetic.py's noise-free path (no instance noise,
-orders = mu). Medians sit 8-13% below it, mainly because with one past event per
-brand the model cannot separate a durable event lift from that year's noise (both
-brands' 2024 events came in below their durable level), and brand_b's fit
-under-captures its 2024 lift by ~0.15 on the log scale (not caused by the BFCM
-shape prior: strength 8, 3 and flat priors all fit 1.07-1.10 vs 1.19 observed).
+orders = mu). Medians sit 8-13% below it because with one past event per brand the
+model cannot separate a durable event lift from that year's noise, and that noise
+ran low: both brands' 2024 event draws were negative, and brand_b's 2024 event days
+also came in ~0.13 (log) under the generator's mean from day-level demand noise.
+The model tracks the observed data there; it is not a misfit, and the seasonal
+Fourier term absorbs essentially none of the lift (scripts/diag_components.py).
 brand_b's 40% depth rides on a prior-only depth coefficient steeper than the
-generator's, which partly offsets. The script itself runs ADVI for speed; ADVI
-numbers vary run to run, so treat them as smoke only.
+generator's, which partly offsets. With a second past BFCM (generate(start=
+"2023-01-05"), scripts/diag_two_event.py) the gap narrows to ~7% for both brands
+and the 80% ranges tighten. The script itself runs ADVI for speed; ADVI numbers
+vary run to run, so treat them as smoke only.
 
 ## Model summary
 
