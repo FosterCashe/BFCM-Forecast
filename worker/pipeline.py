@@ -40,7 +40,7 @@ NUTS_DEFAULTS = {
     "chains": int(os.environ.get("WORKER_NUTS_CHAINS", "4")),
     "draws": int(os.environ.get("WORKER_NUTS_DRAWS", "1000")),
     "tune": int(os.environ.get("WORKER_NUTS_TUNE", "1000")),
-    "target_accept": float(os.environ.get("WORKER_NUTS_TARGET_ACCEPT", "0.9")),
+    "target_accept": float(os.environ.get("WORKER_NUTS_TARGET_ACCEPT", "0.95")),
 }
 DRAWS_DIR = os.environ.get("WORKER_DRAWS_DIR", "/data/draws")
 

@@ -8,7 +8,7 @@ Protocol (same one you run on every real client before delivering):
      Coverage is the product. ~0.8 = calibrated. Much lower = overconfident.
 
 Uses ADVI here for speed. For real client runs use NUTS:
-  idata = pm.sample(1000, tune=1000, chains=4, target_accept=0.9)
+  idata = pm.sample(1000, tune=1000, chains=4, target_accept=0.95)
 ADVI underestimates uncertainty, so expect real coverage to improve under NUTS.
 """
 

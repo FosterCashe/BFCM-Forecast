@@ -40,11 +40,23 @@ documented track record and labeled assumptions. See model/output.py.
     pip install -r requirements.txt
     python scripts/smoke_backtest.py
 
-Verified on synthetic holdout (BFCM 2025 unseen, one brand changes depth
-30% -> 40%): median-path MAPE ~20-21%, 80% coverage 90-95% (slightly wide
-under ADVI, the safe direction). brand_b window total: median $716k-$728k
-across 3 runs vs actual $806k (about 10% low; actual sits inside the 80% range,
-roughly $520k-$1.02M). ADVI results vary run to run even with a fixed seed.
+Reference numbers use the smoke protocol with NUTS (4 chains, 1000 tune + 1000
+draws, target_accept 0.95, one seed) on the synthetic holdout (BFCM 2025 unseen,
+brand_b changes depth 30% -> 40%):
+
+    brand    MAPE  80% cov  window median  80% range        actual  generator central
+    brand_a  19%   90%      $669k          $508k-$894k      $644k   $727k
+    brand_b  19%   90%      $721k          $497k-$1.02M     $844k   $831k
+
+"Generator central" is model/synthetic.py's noise-free path (no instance noise,
+orders = mu). Medians sit 8-13% below it, mainly because with one past event per
+brand the model cannot separate a durable event lift from that year's noise (both
+brands' 2024 events came in below their durable level), and brand_b's fit
+under-captures its 2024 lift by ~0.15 on the log scale (not caused by the BFCM
+shape prior: strength 8, 3 and flat priors all fit 1.07-1.10 vs 1.19 observed).
+brand_b's 40% depth rides on a prior-only depth coefficient steeper than the
+generator's, which partly offsets. The script itself runs ADVI for speed; ADVI
+numbers vary run to run, so treat them as smoke only.
 
 ## Model summary
 
@@ -67,7 +79,7 @@ and report P(sellout). Launches enter as client-assumption lognormals.
 
 1. Run validation, resolve every 'ask' finding (undeclared spikes especially).
 2. Backtest on THEIR history before delivering anything. Coverage is the product.
-3. NUTS for real runs (pm.sample, 4 chains, target_accept=0.9); ADVI is smoke
+3. NUTS for real runs (pm.sample, 4 chains, target_accept=0.95); ADVI is smoke
    only. Store rhat/divergences + backtest scores in model_runs.diagnostics.
    Convergence gate, run with 3 seeds: passes only when pooled divergences are
    under 0.5% of draws, rhat_max <= 1.01, and there are no effective-sample-size

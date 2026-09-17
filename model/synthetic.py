@@ -28,6 +28,8 @@ def generate(seed=11, end="2025-12-10"):
 
         # spend: noisy level with a BFCM push
         spend = np.maximum(rng.normal(900 if b["name"] == "brand_a" else 450, 120, len(dates)), 50.0)
+        for s, e in BFCM.values():
+            spend[(dates >= s) & (dates <= e)] *= 1.9  # brands push spend during BFCM; orders see it via media
         lam_true, K_true, beta_true = 0.45, 1800.0, 0.35
         ad = np.zeros(len(dates))
         for i in range(len(dates)):
@@ -42,7 +44,6 @@ def generate(seed=11, end="2025-12-10"):
             idx = np.where(win)[0]
             if len(idx) == 0:
                 continue
-            spend[idx] *= 1.9  # brands push spend during BFCM
             m = b["bfcm_lift"] + 1.1 * (b["depth"][yr] - 0.30) + rng.normal(0, 0.08)
             lift[idx] = m * shape[: len(idx)]
             event_rows.append(dict(brand=b["name"], event_id=f"{b['name']}_bfcm_{yr}",

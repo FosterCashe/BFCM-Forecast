@@ -37,7 +37,7 @@ queued for each, then starts the API on :8000 and the worker loop. Code:
   worker/loop.py       polls model_runs, claims with FOR UPDATE SKIP LOCKED.
 Fit is ADVI by default for a fast local loop (WORKER_FIT_METHOD=advi); set
 model_runs.config_json.fit_method or WORKER_FIT_METHOD to "nuts" for the real
-client protocol (4 chains, 1000 tune + 1000 draws, target_accept 0.9; override
+client protocol (4 chains, 1000 tune + 1000 draws, target_accept 0.95; override
 per run with config_json.nuts). NUTS runs store per-variable worst rhat and
 divergences in diagnostics_json; run responses carry rhat_flag and
 rhat_flagged_params when any rhat exceeds 1.01.
